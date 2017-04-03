@@ -36,7 +36,6 @@ import rx.Single;
 /**
  * Created by jyliu on 1/30/2017.
  */
-
 public class UploadManager {
     private static final Logger LOG = LoggerFactory.getLogger(UploadManager.class);
     private static final String CONTENT_TYPE_DATA_ARCHIVE = "application/zip";
@@ -90,7 +89,7 @@ public class UploadManager {
                         RxUtils.toBodySingle(api.completeUploadSession(session.getId())
                         ).onErrorReturn((t) -> {
                             LOG.info("Failed to call upload complete, server will recover", t);
-                            return session;
+                            return null; // return doesn't matter, becomes completable
                         })).toCompletable()
                 .andThen(getStatus(session.getId()));
     }
