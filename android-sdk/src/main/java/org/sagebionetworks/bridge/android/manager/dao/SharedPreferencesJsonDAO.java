@@ -7,6 +7,7 @@ import android.support.annotation.AnyThread;
 import com.google.common.base.Function;
 import com.google.gson.reflect.TypeToken;
 
+import org.sagebionetworks.bridge.android.manager.AuthenticationManager;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +19,7 @@ import org.slf4j.LoggerFactory;
  * example of useful transforms to apply.
  */
 @AnyThread
-public class SharedPreferencesJsonDAO {
+public abstract class SharedPreferencesJsonDAO extends AuthenticationManager.AuthenticationListener {
     private static final Logger logger = LoggerFactory.getLogger(SharedPreferencesJsonDAO.class);
 
     protected final SharedPreferences sharedPreferences;
@@ -108,5 +109,10 @@ public class SharedPreferencesJsonDAO {
         logger.debug("getting key: " + key + ", value: " + json);
 
         return RestUtils.GSON.fromJson(json, klass);
+    }
+
+    @Override
+    public void onSignOut(String email) {
+        sharedPreferences.edit().clear().apply();
     }
 }

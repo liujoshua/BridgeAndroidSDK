@@ -75,6 +75,10 @@ public class BridgeManagerProvider {
         consentDAO = new ConsentDAO(applicationContext);
 
         authenticationManager = new AuthenticationManager(bridgeConfig, apiClientProvider, accountDAO);
+
+        authenticationManager.addAuthenticationListener(accountDAO);
+        authenticationManager.addAuthenticationListener(consentDAO);
+
         participantManager = new ParticipantManager(authenticationManager, accountDAO);
         consentManager = new ConsentManager(authenticationManager, consentDAO);
         activityManager = new ActivityManager(authenticationManager);

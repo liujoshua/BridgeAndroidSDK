@@ -4,6 +4,8 @@ import android.support.annotation.AnyThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
+import com.google.common.collect.Lists;
+
 import org.sagebionetworks.bridge.android.BridgeConfig;
 import org.sagebionetworks.bridge.android.manager.dao.AccountDAO;
 import org.sagebionetworks.bridge.android.util.retrofit.RxUtils;
@@ -18,6 +20,8 @@ import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.UserSessionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 import rx.Completable;
 import rx.Single;
@@ -35,7 +39,10 @@ public class AuthenticationManager {
     private final AccountDAO accountDAO;
     @NonNull
     private final BridgeConfig config;
+    @NonNull
     private final AuthenticationApi authenticationApi;
+    @NonNull
+    private final List<AuthenticationListener> authenticationListeners;
     private ApiClientProvider apiClientProvider;
     private ProxiedForConsentedUsersApi proxiedForConsentedUsersApi;
 
@@ -47,8 +54,16 @@ public class AuthenticationManager {
         this.config = config;
         this.accountDAO = accountDAO;
         this.apiClientProvider = apiClientProvider;
-
         this.authenticationApi = apiClientProvider.getClient(AuthenticationApi.class);
+        this.authenticationListeners = Lists.newArrayList();
+    }
+
+    public void addAuthenticationListener(AuthenticationListener authenticationListener) {
+        authenticationListeners.add(authenticationListener);
+    }
+
+    public void removeAuthenticationListener(AuthenticationListener authenticationListener) {
+        authenticationListeners.remove(authenticationListener);
     }
 
     /**
@@ -117,6 +132,10 @@ public class AuthenticationManager {
                             .externalId(signUp.getExternalId());
 
                     accountDAO.setStudyParticipant(participant);
+
+                    for (AuthenticationListener listener : authenticationListeners) {
+                        listener.onSignUp(signUp.getEmail());
+                    }
                 }).doOnError(throwable -> {
                     accountDAO.setSignIn(null);
                     accountDAO.setStudyParticipant(null);
@@ -171,6 +190,11 @@ public class AuthenticationManager {
                     accountDAO.setStudyParticipant(
                             new StudyParticipant()
                                     .email(signIn.getEmail()));
+
+                    for (AuthenticationListener listener : authenticationListeners) {
+                        listener.onSignIn(email);
+                    }
+
                 }).doOnError(throwable -> {
                     // a 412 is a successful signin
                     if (throwable instanceof ConsentRequiredException) {
@@ -183,7 +207,7 @@ public class AuthenticationManager {
                     }
                 });
     }
-    
+
     /**
      * On success, clears the participant's email, password and session from storage
      *
@@ -191,13 +215,19 @@ public class AuthenticationManager {
      */
     @NonNull
     public Completable signOut() {
-        logger.debug("signOut called");
+        SignIn signIn = accountDAO.getSignIn();
+        String email = signIn != null ? signIn.getEmail() : null;
+
+        logger.debug("signOut called, email in DAO is: " + email);
 
         return RxUtils.toBodySingle(authenticationApi.signOut())
                 .doOnSuccess(message -> {
                     accountDAO.setSignIn(null);
                     accountDAO.setUserSessionInfo(null);
                     accountDAO.setStudyParticipant(null);
+                    for (AuthenticationListener listener : authenticationListeners) {
+                        listener.onSignOut(email);
+                    }
                 }).toCompletable();
     }
 
@@ -287,5 +317,17 @@ public class AuthenticationManager {
         // session interceptor will update itself with the session in the response
         return RxUtils.toBodySingle(
                 getApi().updateUsersParticipantRecord(new StudyParticipant()));
+    }
+
+
+    public static abstract class AuthenticationListener {
+        public void onSignUp(String email) {
+        }
+
+        public void onSignIn(String email) {
+        }
+
+        public void onSignOut(String email) {
+        }
     }
 }

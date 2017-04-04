@@ -41,7 +41,6 @@ public class ConsentManager {
     private final ForConsentedUsersApi forConsentedUsersApi;
     private final ConsentDAO consentDAO;
 
-
     public ConsentManager(@NonNull AuthenticationManager authenticationManager, ConsentDAO consentDAO) {
         this.authenticationManager = authenticationManager;
         this.forConsentedUsersApi = authenticationManager.getApi();
