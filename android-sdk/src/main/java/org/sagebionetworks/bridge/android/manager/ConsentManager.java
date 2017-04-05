@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.android.manager;
 
+import android.support.annotation.AnyThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
@@ -139,11 +140,11 @@ public class ConsentManager {
      * @return completable
      */
     @NonNull
-    public Completable giveConsent(@NonNull String subpopulationGuid, @NonNull String name,
-                                   @NonNull LocalDate birthdate,
-                                   @Nullable String base64Image, @Nullable String imageMimeType,
-                                   @NonNull SharingScope sharingScope) {
-        ConsentSignature consent = giveConsentSync(
+    public Single<UserSessionInfo> giveConsent(@NonNull String subpopulationGuid, @NonNull String name,
+                                               @NonNull LocalDate birthdate,
+                                               @Nullable String base64Image, @Nullable String imageMimeType,
+                                               @NonNull SharingScope sharingScope) {
+        ConsentSignature consent = storeConsentSignatureLocally(
                 subpopulationGuid,
                 name,
                 birthdate,
@@ -151,18 +152,15 @@ public class ConsentManager {
                 imageMimeType,
                 sharingScope);
 
-        return Single.just(consent)
-                .flatMapCompletable(consentSignature -> RxUtils.toBodySingle(
-                        forConsentedUsersApi
-                                .createConsentSignature(
-                                        subpopulationGuid,
-                                        consentSignature))
-                        .doOnError(e ->
-                                LOG.info("Couldn't upload consent to Bridge, " +
-                                        "subpopulationGuid: " + subpopulationGuid, e))
-                        .compose(safeGetNewSessionOnSuccess())
-                        .toCompletable()
-                );
+        return uploadConsent(subpopulationGuid, consent);
+    }
+
+    Single<UserSessionInfo> uploadConsent(String subpopulationGuid, ConsentSignature consent) {
+        return RxUtils.toBodySingle(
+                forConsentedUsersApi
+                        .createConsentSignature(
+                                subpopulationGuid,
+                                consent));
     }
 
     /**
@@ -177,11 +175,34 @@ public class ConsentManager {
      * @param sharingScope      participant's sharing scope for the study (required)
      * @return the resulting consentSignature
      */
+    @AnyThread
     public ConsentSignature giveConsentSync(@NonNull String subpopulationGuid, @NonNull String name,
                                             @NonNull LocalDate birthdate,
                                             @Nullable String base64Image,
                                             @Nullable String imageMimeType,
                                             @NonNull SharingScope sharingScope) {
+        checkNotNull(subpopulationGuid);
+        checkNotNull(name);
+        checkNotNull(birthdate);
+        checkNotNull(sharingScope);
+
+        final ConsentSignature consentSignature = storeConsentSignatureLocally(
+                subpopulationGuid,
+                name,
+                birthdate,
+                base64Image,
+                imageMimeType,
+                sharingScope);
+
+        uploadConsent(subpopulationGuid, consentSignature).subscribe();
+
+        return consentSignature;
+    }
+
+    private ConsentSignature storeConsentSignatureLocally(@NonNull String subpopulationGuid, @NonNull String name,
+                                                          @NonNull LocalDate birthdate,
+                                                          @Nullable String base64Image, @Nullable String imageMimeType,
+                                                          @NonNull SharingScope sharingScope) {
         checkNotNull(subpopulationGuid);
         checkNotNull(name);
         checkNotNull(birthdate);
@@ -194,19 +215,10 @@ public class ConsentManager {
                 .imageMimeType(imageMimeType)
                 .scope(sharingScope);
 
-        storeConsentSignatureLocally(subpopulationGuid, consentSignature);
+        LOG.debug("Saving consent locally, subpopulationGuid: " + subpopulationGuid);
+        consentDAO.putConsent(subpopulationGuid, consentSignature);
 
         return consentSignature;
-    }
-
-    private void storeConsentSignatureLocally(@NonNull String subpopulationGuid,
-                                              @NonNull ConsentSignature consentSignature) {
-        checkNotNull(subpopulationGuid);
-        checkNotNull(consentSignature);
-
-        LOG.debug("Saving consent locally, subpopulationGuid: " + subpopulationGuid);
-
-        consentDAO.putConsent(subpopulationGuid, consentSignature);
     }
 
     /**

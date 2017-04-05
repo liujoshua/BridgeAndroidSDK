@@ -184,6 +184,16 @@ public class AuthenticationManager {
 
         return RxUtils.toBodySingle(
                 authenticationApi.signIn(signIn))
+                .retryWhen(attempts -> {
+                    attempts.flatMap(throwable -> {
+                       if (throwable instanceof ConsentRequiredException) {
+                           // do upload
+                       }
+                        throw throwable;
+                    });
+
+                    return null;
+                })
                 .doOnSuccess(userSessionInfo -> {
                     accountDAO.setSignIn(signIn);
                     accountDAO.setUserSessionInfo(userSessionInfo);

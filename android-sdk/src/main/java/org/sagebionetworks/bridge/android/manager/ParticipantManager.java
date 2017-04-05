@@ -32,12 +32,14 @@ public class ParticipantManager {
     private final ForConsentedUsersApi api;
     @NonNull
     private final AccountDAO accountDAO;
+    @NonNull
+    private final AuthenticationManager authhMan;
 
     public ParticipantManager(@NonNull AuthenticationManager authenticationManager,
                               @NonNull AccountDAO accountDAO) {
         checkNotNull(authenticationManager);
         checkNotNull(accountDAO);
-
+        this.authhMan = authenticationManager;
         this.api = authenticationManager.getApi();
         this.accountDAO = accountDAO;
     }
