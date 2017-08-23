@@ -3,7 +3,10 @@ package org.sagebionetworks.bridge.android.manager;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.sagebionetworks.bridge.rest.api.ForConsentedUsersApi;
+import org.sagebionetworks.bridge.rest.model.ActivityEventList;
 import org.sagebionetworks.bridge.rest.model.ConsentSignature;
+import org.sagebionetworks.bridge.rest.model.CustomActivityEventRequest;
+import org.sagebionetworks.bridge.rest.model.ForwardCursorScheduledActivityList;
 import org.sagebionetworks.bridge.rest.model.GuidHolder;
 import org.sagebionetworks.bridge.rest.model.Message;
 import org.sagebionetworks.bridge.rest.model.NotificationRegistration;
@@ -13,6 +16,7 @@ import org.sagebionetworks.bridge.rest.model.ReportIndexList;
 import org.sagebionetworks.bridge.rest.model.ScheduleList;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivity;
 import org.sagebionetworks.bridge.rest.model.ScheduledActivityList;
+import org.sagebionetworks.bridge.rest.model.ScheduledActivityListV4;
 import org.sagebionetworks.bridge.rest.model.StudyParticipant;
 import org.sagebionetworks.bridge.rest.model.SubscriptionRequest;
 import org.sagebionetworks.bridge.rest.model.SubscriptionStatusList;
@@ -44,14 +48,19 @@ class ProxiedForConsentedUsersApi implements ForConsentedUsersApi {
     }
 
     @Override
-    public Call<UploadSession> completeUploadSession(@Path("uploadId") String s) {
+    public Call<Message> completeUploadSession(@Path("uploadId") String s) {
         return getRawApi().completeUploadSession(s);
     }
 
     @Override
-    public Call<Message> createConsentSignature(@Path("subpopulationGuid") String s, @Body
+    public Call<UserSessionInfo> createConsentSignature(@Path("subpopulationGuid") String s, @Body
             ConsentSignature consentSignature) {
         return getRawApi().createConsentSignature(s, consentSignature);
+    }
+
+    @Override
+    public Call<Message> createCustomActivityEvent(@Body CustomActivityEventRequest body) {
+        return getRawApi().createCustomActivityEvent(body);
     }
 
     @Override
@@ -74,6 +83,16 @@ class ProxiedForConsentedUsersApi implements ForConsentedUsersApi {
     public Call<Message> emailDataToUser(@Query("startDate") LocalDate localDate, @Query
             ("getEndDate") LocalDate localDate1) {
         return getRawApi().emailDataToUser(localDate, localDate1);
+    }
+
+    @Override
+    public Call<ActivityEventList> getActivityEvents() {
+        return getRawApi().getActivityEvents();
+    }
+
+    @Override
+    public Call<ForwardCursorScheduledActivityList> getActivityHistory(@Path("activityGuid") String activityGuid, @Query("scheduledOnStart") DateTime scheduledOnStart, @Query("scheduledOnEnd") DateTime scheduledOnEnd, @Query("offsetKey") String offsetKey, @Query("pageSize") Integer pageSize) {
+        return getRawApi().getActivityHistory(activityGuid, scheduledOnStart, scheduledOnEnd, offsetKey, pageSize);
     }
 
     @Override
@@ -111,6 +130,11 @@ class ProxiedForConsentedUsersApi implements ForConsentedUsersApi {
     public Call<ScheduledActivityList> getScheduledActivities(@Query("offset") String s, @Query
             ("daysAhead") Integer integer, @Query("minimumPerSchedule") Integer integer1) {
         return getRawApi().getScheduledActivities(s, integer, integer1);
+    }
+
+    @Override
+    public Call<ScheduledActivityListV4> getScheduledActivitiesByDateRange(@Query("startTime") DateTime startTime, @Query("endTime") DateTime endTime) {
+        return getRawApi().getScheduledActivitiesByDateRange(startTime, endTime);
     }
 
     @Override
@@ -174,12 +198,12 @@ class ProxiedForConsentedUsersApi implements ForConsentedUsersApi {
     }
 
     @Override
-    public Call<Message> withdrawAllConsents(@Body Withdrawal withdrawal) {
+    public Call<UserSessionInfo> withdrawAllConsents(@Body Withdrawal withdrawal) {
         return getRawApi().withdrawAllConsents(withdrawal);
     }
 
     @Override
-    public Call<Message> withdrawConsentFromSubpopulation(@Path("subpopulationGuid") String s,
+    public Call<UserSessionInfo> withdrawConsentFromSubpopulation(@Path("subpopulationGuid") String s,
                                                           @Body Withdrawal withdrawal) {
         return getRawApi().withdrawConsentFromSubpopulation(s, withdrawal);
     }

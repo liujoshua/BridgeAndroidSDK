@@ -88,11 +88,8 @@ public class UploadManager {
                     LOG.info("Couldn't upload to s3", t);
                 }).andThen(
                         RxUtils.toBodySingle(api.completeUploadSession(session.getId())
-                        ).onErrorReturn((t) -> {
-                            LOG.info("Failed to call upload complete, server will recover", t);
-                            return session;
-                        })).toCompletable()
-                .andThen(getStatus(session.getId()));
+                        ).toCompletable().onErrorComplete()
+                ).andThen(getStatus(session.getId()));
     }
 
     Single<UploadSession> requestUploadSession(UploadFile uploadFile) {
