@@ -400,6 +400,11 @@ public class TaskHelperTest {
     }
 
     @Test
+    public void testToBridgeArchiveFile_ChoiceSurveyAnswer() {
+
+    }
+
+    @Test
     public void testFlattenMapForAudioTaskResult() {
         TaskResult taskResult = TaskHelperTest.audioTaskResult();
         List<Result> resultList = TaskHelper.flattenResults(taskResult);
