@@ -2,9 +2,11 @@ package org.sagebionetworks.bridge.researchstack;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.VisibleForTesting;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 
 import org.joda.time.DateTime;
@@ -51,7 +53,8 @@ import rx.schedulers.Schedulers;
 public class TaskHelper {
     private static final Logger logger = LoggerFactory.getLogger(TaskHelper.class);
 
-    // these are used to getConsent task/step guids without rereading the json files and iterating through
+    // these are used to getConsent task/step guids without rereading the json files and
+    // iterating through
     private final Map<String, String> loadedTaskGuids = new HashMap<>();
     private final Map<String, String> loadedTaskDates = new HashMap<>();
     private final Map<String, String> loadedTaskCrons = new HashMap<>();
@@ -131,7 +134,8 @@ public class TaskHelper {
             if (result == null) {
                 schedules.add(schedule);
             } else if (!Strings.isNullOrEmpty(schedule.scheduleString)) {
-                Date date = ScheduleHelper.nextSchedule(schedule.scheduleString, result.getEndDate());
+                Date date = ScheduleHelper.nextSchedule(schedule.scheduleString, result
+                        .getEndDate());
                 if (date.before(new Date())) {
                     schedules.add(schedule);
                 }
@@ -250,13 +254,14 @@ public class TaskHelper {
     void uploadTaskResult(TaskResult taskResult, Archive.Builder builder) {
         BridgeConfig config = bridgeManagerProvider.getBridgeConfig();
         builder.withAppVersionName(config.getAppVersionName())
-                .withPhoneInfo(config.getDeviceName());
+                .withPhoneInfo(config.getPhoneInfo());
 
         String taskId = taskResult.getIdentifier();
 
         // Update/Create TaskNotificationService
         if (appPrefs.isTaskReminderEnabled()) {
-            logger.info("SampleDataProvider", "uploadTaskResult() _ isTaskReminderEnabled() = true");
+            logger.info("SampleDataProvider", "uploadTaskResult() _ isTaskReminderEnabled() = " +
+                    "true");
 
             String chronTime = findChronTime(taskId);
 
@@ -272,6 +277,9 @@ public class TaskHelper {
         for (Result result : results) {
             ArchiveFile archiveFile = archiveFileFactory.fromResult(result);
             if (archiveFile != null) {
+                logger.debug(String.valueOf(archiveFile.getByteSource().asCharSource(Charsets
+                        .UTF_8)).toString());
+
                 builder.addDataFile(archiveFile);
             } else {
                 logger.error("Failed to convert Result to BridgeDataInput " + result.toString());

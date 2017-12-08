@@ -21,7 +21,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicReference;
 
-import retrofit2.http.Query;
 import rx.Completable;
 import rx.Observable;
 import rx.Single;
@@ -45,10 +44,14 @@ public class ActivityManager {
 
     /**
      * @param startTime start time for the activity list
-     * @param endTime end time for the activity list
+     * @param endTime   end time for the activity list
      * @return schedule activity list
      */
-    public Single<ScheduledActivityListV4> getActivites(DateTime startTime, DateTime endTime) {
+    public Single<ScheduledActivityListV4> getActivites(@NonNull DateTime startTime,
+                                                        @NonNull DateTime endTime) {
+        checkNotNull(startTime);
+        checkNotNull(endTime);
+
         return toBodySingle(apiAtomicReference.get()
                 .getScheduledActivitiesByDateRange(startTime, endTime)).doOnSuccess(
                 scheduleActivityList -> {
@@ -56,7 +59,8 @@ public class ActivityManager {
                 });
     }
 
-    public Single<ScheduledActivityList> getActivities(String offset, int daysAhead, int minimumPerSchedule) {
+    public Single<ScheduledActivityList> getActivities(String offset, int daysAhead, int
+            minimumPerSchedule) {
         return toBodySingle(apiAtomicReference.get()
                 .getScheduledActivities(offset, daysAhead, minimumPerSchedule)).doOnSuccess(
                 scheduleActivityList -> {
@@ -82,7 +86,8 @@ public class ActivityManager {
         checkNotNull(scheduledActivity);
 
         return toBodySingle(apiAtomicReference.get()
-                .updateScheduledActivities(Collections.singletonList(scheduledActivity))).toObservable();
+                .updateScheduledActivities(Collections.singletonList(scheduledActivity)))
+                .toObservable();
     }
 
     private String getTimezoneOffset() {
@@ -91,7 +96,7 @@ public class ActivityManager {
         Date currentLocalTime = calendar.getTime();
         DateFormat date = new SimpleDateFormat("Z");
         String localTime = date.format(currentLocalTime);
-        String offset = localTime.substring(0, 3) + ":"+ localTime.substring(3, 5);
+        String offset = localTime.substring(0, 3) + ":" + localTime.substring(3, 5);
 
         return offset;
     }

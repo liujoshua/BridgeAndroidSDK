@@ -28,7 +28,7 @@ import org.sagebionetworks.bridge.researchstack.R;
 import org.sagebionetworks.bridge.researchstack.task.creation.BridgeSurveyItemAdapter;
 import org.sagebionetworks.bridge.researchstack.task.creation.BridgeTaskItemAdapter;
 
-import static junit.framework.Assert.*;
+import static org.junit.Assert.*;
 
 /**
  * Created by TheMDP on 3/25/17.

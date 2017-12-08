@@ -1,6 +1,7 @@
 package org.sagebionetworks.bridge.android;
 
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.support.annotation.AnyThread;
 import android.support.annotation.NonNull;
@@ -10,6 +11,7 @@ import android.text.TextUtils;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
+
 import org.sagebionetworks.bridge.android.manager.upload.SchemaKey;
 import org.sagebionetworks.bridge.rest.RestUtils;
 import org.slf4j.Logger;
@@ -47,10 +49,10 @@ public class BridgeConfig {
     /**
      * Filename for external ID settings. This file should be in the format:
      * {
-     *   "emailFormat":"example+%s@example.com",
-     *   "passwordFormat":"%s"
+     * "emailFormat":"example+%s@example.com",
+     * "passwordFormat":"%s"
      * }
-     *
+     * <p>
      * Where %s will be replaced by the external ID. This file is optional.
      */
     public static final String EXTERNAL_ID_SETTINGS_FILENAME = "external_id_settings.json";
@@ -70,12 +72,15 @@ public class BridgeConfig {
     private static final String KEY_EXTERNAL_ID_EMAIL_FORMAT = "emailFormat";
     private static final String KEY_EXTERNAL_ID_PASSWORD_FORMAT = "passwordFormat";
     private static final Type STRING_TO_STRING_MAP =
-            new TypeToken<Map<String, String>>(){}.getType();
+            new TypeToken<Map<String, String>>() {
+            }.getType();
     private static final Type TASK_TO_SCHEMA_TYPE =
-            new TypeToken<Map<String, SchemaKey>>(){}.getType();
+            new TypeToken<Map<String, SchemaKey>>() {
+            }.getType();
 
     private final Context applicationContext;
     private final String externalIdEmailFormat;
+
     /**
      * @return external ID format specified from file, if one exists, null otherwise
      */
@@ -154,7 +159,7 @@ public class BridgeConfig {
     }
 
     public int getSdkVersion() {
-        return applicationContext.getResources().getInteger(R.integer.osb_android_sdk_version);
+        return BuildConfig.VERSION_CODE;
     }
 
     @NonNull
@@ -174,12 +179,28 @@ public class BridgeConfig {
 
     @NonNull
     public int getAppVersion() {
-        return BuildConfig.VERSION_CODE;
+        try {
+            return applicationContext.getPackageManager()
+                    .getPackageInfo(applicationContext.getPackageName(), 0)
+                    .versionCode;
+        } catch (PackageManager.NameNotFoundException e) {
+            logger.warn("unable to get app's versionCode", e);
+            // this is the versionCode from android-sdk
+            return BuildConfig.VERSION_CODE;
+        }
     }
 
     @NonNull
     public String getAppVersionName() {
-        return BuildConfig.VERSION_NAME;
+        try {
+            return applicationContext.getPackageManager()
+                    .getPackageInfo(applicationContext.getPackageName(), 0)
+                    .versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            logger.warn("unable to get app's versionName", e);
+            // this is the versionName from android-sdk
+            return BuildConfig.VERSION_NAME;
+        }
     }
 
     @NonNull
@@ -188,7 +209,7 @@ public class BridgeConfig {
                 ACCESS_BUFFER)) {
             return (X509Certificate) new CertificateFactory().engineGenerateCertificate(
                     publicKeyFile);
-        } catch(IOException e) {
+        } catch (IOException e) {
             logger.error("Could not load public key from /assets/study_public_key.pem", e);
             throw e;
         }
@@ -213,7 +234,13 @@ public class BridgeConfig {
     @NonNull
     public final String getUserAgent() {
         return getStudyName() + "/" + getAppVersion() + " (" + getDeviceName() + "; Android "
-                + VERSION.RELEASE + ") BridgeSDK/" + getSdkVersion();
+                + Build.VERSION.RELEASE + ") BridgeAndroidSDK/" + getSdkVersion();
+    }
+
+    // used in metadata for uploads
+    @NonNull
+    public String getPhoneInfo() {
+        return getDeviceName() + ";" + Build.VERSION.RELEASE;
     }
 
     @NonNull
@@ -258,7 +285,8 @@ public class BridgeConfig {
         if (externalIdEmailFormat != null) {
             return String.format(externalIdEmailFormat, externalId);
         } else {
-            throw new UnsupportedOperationException("Credentials for external ID require asset file " +
+            throw new UnsupportedOperationException("Credentials for external ID require asset " +
+                    "file " +
                     EXTERNAL_ID_SETTINGS_FILENAME);
         }
     }
@@ -273,7 +301,8 @@ public class BridgeConfig {
         if (externalIdPasswordFormat != null) {
             return String.format(externalIdPasswordFormat, externalId);
         } else {
-            throw new UnsupportedOperationException("Credentials for external ID require asset file " +
+            throw new UnsupportedOperationException("Credentials for external ID require asset " +
+                    "file " +
                     EXTERNAL_ID_SETTINGS_FILENAME);
         }
     }

@@ -23,7 +23,7 @@ import rx.Single;
 import rx.schedulers.TestScheduler;
 import rx.subjects.TestSubject;
 
-import static junit.framework.Assert.assertTrue;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
