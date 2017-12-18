@@ -351,7 +351,6 @@ public abstract class BridgeDataProvider extends DataProvider {
                 .andThen(SUCCESS_DATA_RESPONSE);
     }
 
-    /** {@inheritDoc} */
     @NonNull
     @Override
     public Observable<DataResponse> signInWithExternalId(
@@ -361,7 +360,22 @@ public abstract class BridgeDataProvider extends DataProvider {
         return signIn(email, password).andThen(SUCCESS_DATA_RESPONSE);
     }
 
-    /**
+    @Override
+    public Observable<DataResponse> requestSignInLink(String email) {
+        return authenticationManager.requestEmailSignIn(email)
+                .andThen(SUCCESS_DATA_RESPONSE);
+    }
+
+    @Override
+    public Observable<DataResponse> signInWithEmailAndToken(String email, String token) {
+        return authenticationManager.signInViaEmailLink(email, token)
+                .doOnSuccess(session -> bridgeManagerProvider.getAccountDao()
+                        .setDataGroups(session.getDataGroups()))
+                .toCompletable()
+        .andThen(SUCCESS_DATA_RESPONSE);
+    }
+
+    /**`
      * @param email    the participant's email
      * @param password participant's password
      * @return completion
