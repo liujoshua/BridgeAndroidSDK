@@ -3,7 +3,9 @@ package org.sagebionetworks.bridge.android.manager;
 import android.support.annotation.AnyThread;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.VisibleForTesting;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
@@ -67,30 +69,67 @@ public class AuthenticationManager {
     @NonNull
     private final AtomicReference<ForConsentedUsersApi> forConsentedUsersApiAtomicReference;
 
-    public AuthenticationManager(@NonNull BridgeConfig config, @NonNull ApiClientProvider
-            apiClientProvider,
+    public AuthenticationManager(@NonNull BridgeConfig config,
+                                 @NonNull ApiClientProvider apiClientProvider,
                                  @NonNull AccountDAO accountDAO, @NonNull ConsentDAO consentDAO) {
         checkNotNull(config);
-        checkNotNull(apiClientProvider);
         checkNotNull(accountDAO);
         checkNotNull(consentDAO);
 
         this.config = config;
         this.accountDAO = accountDAO;
         this.consentDAO = consentDAO;
+
         this.apiClientProvider = apiClientProvider;
 
-        this.authenticationApi = apiClientProvider.getClient(AuthenticationApi.class);
+        this.authenticationApi = apiClientProvider.getAuthenticationApi();
 
-        SignIn signIn = accountDAO.getSignIn();
-
-        ForConsentedUsersApi api = signIn == null
-                ? apiClientProvider.getClient(ForConsentedUsersApi.class)
-                : apiClientProvider.getClient(ForConsentedUsersApi.class, signIn);
-
-        this.forConsentedUsersApiAtomicReference = new AtomicReference<>(api);
+        this.forConsentedUsersApiAtomicReference =
+                new AtomicReference<>(createApiFromStoredCredentials());
         listeners = Lists.newArrayList();
     }
+
+    @NonNull
+    private ForConsentedUsersApi createApiFromStoredCredentials() {
+        ApiClientProvider.AuthenticatedClientProvider provider =
+                createAuthenticatedClientProviderFromStoredCredentials();
+
+        if (provider == null) {
+            return apiClientProvider.getClient(ForConsentedUsersApi.class);
+        }
+        return provider.getClient(ForConsentedUsersApi.class);
+    }
+    @VisibleForTesting
+    @Nullable
+    ApiClientProvider.AuthenticatedClientProvider
+    createAuthenticatedClientProviderFromStoredCredentials() {
+        String email = accountDAO.getEmail();
+        if (!Strings.isNullOrEmpty(email)) {
+            ApiClientProvider.AuthenticatedClientProviderBuilder builder =
+                    apiClientProvider
+                            .getAuthenticatedClientProviderBuilder()
+                            .withEmail(email);
+
+            boolean hasPasswordOrSession = false;
+            String password = accountDAO.getPassword();
+            if (!Strings.isNullOrEmpty(password)) {
+                hasPasswordOrSession = true;
+                builder.withPassword(email);
+            }
+
+            UserSessionInfo session = accountDAO.getUserSessionInfo();
+            if (session != null) {
+                hasPasswordOrSession = true;
+                builder.withSession(getUserSessionInfo());
+            }
+
+            if (hasPasswordOrSession) {
+                return builder.build();
+            }
+        }
+        return null;
+    }
+
 
     /**
      * Basic sign up that fills in the minimal requirements of email and password fields; in
@@ -109,6 +148,7 @@ public class AuthenticationManager {
         checkNotNull(password);
 
         logger.debug("signUp called with email: " + email);
+
 
         SignUp participantSignUp = new SignUp()
                 .study(config.getStudyId())
@@ -151,8 +191,11 @@ public class AuthenticationManager {
                             .password(signUp.getPassword());
 
                     accountDAO.setSignIn(signIn);
+                    accountDAO.setEmail(signUp.getEmail());
+                    accountDAO.setPassword(signUp.getPassword());
+
                     forConsentedUsersApiAtomicReference.set(
-                            apiClientProvider.getClient(ForConsentedUsersApi.class, signIn)
+                            createApiFromStoredCredentials()
                     );
 
                     StudyParticipant participant = new StudyParticipant();
@@ -222,7 +265,7 @@ public class AuthenticationManager {
                                 .email(email)
                                 .study(config.getStudyId())
                                 .token(token)))
-                .compose(signInHelper(signIn, config.getStudyId()))
+                .compose(signInHelper(signIn))
                 .doOnSuccess(session -> logger.debug("Successfully signed in via email"))
                 .doOnError(t -> {
                     logger.debug("Failed to sign in via email", t);
@@ -259,18 +302,16 @@ public class AuthenticationManager {
 
         return RxUtils.toBodySingle(
                 authenticationApi.signIn(signIn))
-                .compose(signInHelper(signIn, studyId));
+                .compose(signInHelper(signIn));
     }
 
     /**
      * Used to transform a raw Bridge signIn single by retrying upload of required consent if it
      * is present locally and setting state on success/failure
      * @param signIn signIn credentials
-     * @param subpopulationGuid consent to upload
      * @return
      */
-    Single.Transformer<UserSessionInfo, UserSessionInfo> signInHelper(SignIn signIn,
-                                                                      String subpopulationGuid) {
+    Single.Transformer<UserSessionInfo, UserSessionInfo> signInHelper(SignIn signIn) {
         final String email = signIn.getEmail();
 
         return userSessionInfoSingle -> userSessionInfoSingle
@@ -281,71 +322,56 @@ public class AuthenticationManager {
                         session = notification.getValue();
                     } else if (kind == Notification.Kind.OnError) {
                         Throwable t = notification.getThrowable();
+
+                        // this is still successful for authentication purposes
                         if (t instanceof ConsentRequiredException) {
                             session = ((ConsentRequiredException) t).getSession();
 
-                            if (isConsentedInLocal(subpopulationGuid)) {
+                            // look for a missing required consent which we have locally
+                            for (Map.Entry<String, ConsentStatus> consentStatusEntry : session
+                                    .getConsentStatuses().entrySet()) {
+                                String subpopulationGuid = consentStatusEntry.getKey();
+                                ConsentStatus consentStatus = consentStatusEntry.getValue();
 
-                                uploadLocalConsents()
-                                        .onErrorResumeNext(Observable.just(session))
-                                        .subscribe();
+                                // required consent missing on Bridge and present locally
+                                if (consentStatus.getRequired()
+                                        && !consentStatus.getConsented()
+                                        && isConsentedInLocal(subpopulationGuid)){
+
+                                    // upload local consents, ignoring errors
+                                    uploadLocalConsents()
+                                            .onErrorResumeNext(Observable.just(session))
+                                            .subscribe();
+                                    break;
+                                }
                             }
                         }
                     }
 
                     if (session != null) {
-                        apiClientProvider
-                                .setEmailUserSessionInfo(config.getStudyId(), email, session);
+                        accountDAO.setEmail(email);
+
+                        String password = signIn.getPassword();
+                        if (!Strings.isNullOrEmpty(password)){
+                            accountDAO.setPassword(password);
+                        }
+
+                        accountDAO.setUserSessionInfo(session);
+
+                        forConsentedUsersApiAtomicReference.set(
+                                createApiFromStoredCredentials()
+                        );
+
                         accountDAO.setStudyParticipant(
                                 new StudyParticipant()
                                         .email(signIn.getEmail()));
-                        forConsentedUsersApiAtomicReference.set(
-                                apiClientProvider.getClient(ForConsentedUsersApi.class, email)
-                        );
+
                     } else {
                         accountDAO.setSignIn(null);
+                        accountDAO.setPassword(null);
+                        accountDAO.setUserSessionInfo(null);
                     }
-                    accountDAO.setUserSessionInfo(session);
-                })
-                .onErrorResumeNext(throwable -> {
-                    if (throwable instanceof ConsentRequiredException
-                            && isConsentedInLocal(subpopulationGuid)) {
-                        UserSessionInfo session =
-                                ((ConsentRequiredException) throwable).getSession();
-                        return uploadLocalConsents()
-                                .onErrorReturn(throwable1 -> session)
-                                .last()
-                                .toSingle();
-                    }
-                    return Single.error(throwable);
                 });
-//
-//                .doOnSuccess(userSessionInfo -> {
-//                    forConsentedUsersApiAtomicReference.set(
-//                            apiClientProvider.getClient(ForConsentedUsersApi.class, email)
-//                    );
-//                    accountDAO.setUserSessionInfo(userSessionInfo);
-//                    accountDAO.setStudyParticipant(
-//                            new StudyParticipant()
-//                                    .email(signIn.getEmail()));
-//                    for (AuthenticationEventListener listener : listeners) {
-//                        listener.onSignedIn(signIn.getEmail());
-//                    }
-//                }).doOnError(throwable -> {
-//                    // a 412 is a successful signin
-//                    if (throwable instanceof ConsentRequiredException) {
-//                        forConsentedUsersApiAtomicReference.set(
-//                                apiClientProvider.getClient(ForConsentedUsersApi.class, signIn)
-//                        );
-//                        accountDAO.setUserSessionInfo(
-//                                ((ConsentRequiredException) throwable).getSession());
-//                        accountDAO.setStudyParticipant(
-//                                new StudyParticipant()
-//                                        .email(signIn.getEmail()));
-//                    } else {
-//                        accountDAO.setSignIn(null);
-//                    }
-//                });
     }
 
     /**
@@ -459,8 +485,7 @@ public class AuthenticationManager {
      */
     @Nullable
     public String getEmail() {
-        SignIn signIn = accountDAO.getSignIn();
-        return signIn == null ? null : signIn.getEmail();
+        return accountDAO.getEmail();
     }
 
     /**
@@ -474,8 +499,10 @@ public class AuthenticationManager {
 
         // TODO: a way to distinguish if session is null because we haven't signed on, or if it
         // was invalidated
-        UserSessionInfoProvider sessionProvider = apiClientProvider.getUserSessionInfoProvider
-                (accountDAO.getSignIn());
+
+        UserSessionInfoProvider sessionProvider =
+                createAuthenticatedClientProviderFromStoredCredentials()
+                        .getUserSessionInfoProvider();
         if (sessionProvider != null) {
             UserSessionInfo session = sessionProvider.getSession();
 
