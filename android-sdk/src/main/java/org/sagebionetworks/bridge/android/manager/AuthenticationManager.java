@@ -500,15 +500,20 @@ public class AuthenticationManager {
         // TODO: a way to distinguish if session is null because we haven't signed on, or if it
         // was invalidated
 
-        UserSessionInfoProvider sessionProvider =
-                createAuthenticatedClientProviderFromStoredCredentials()
-                        .getUserSessionInfoProvider();
-        if (sessionProvider != null) {
-            UserSessionInfo session = sessionProvider.getSession();
+        ApiClientProvider.AuthenticatedClientProvider provider =
+                createAuthenticatedClientProviderFromStoredCredentials();
 
-            if (session != null) {
-                accountDAO.setUserSessionInfo(session);
-                return session;
+        if (provider != null){
+            UserSessionInfoProvider sessionProvider =
+                    createAuthenticatedClientProviderFromStoredCredentials()
+                            .getUserSessionInfoProvider();
+            if (sessionProvider != null) {
+                UserSessionInfo session = sessionProvider.getSession();
+
+                if (session != null) {
+                    accountDAO.setUserSessionInfo(session);
+                    return session;
+                }
             }
         }
 
