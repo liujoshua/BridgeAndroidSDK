@@ -310,8 +310,8 @@ public abstract class BridgeDataProvider extends DataProvider {
 
     @NonNull
     @Override
-    public Observable<DataResponse> signUp(Context context, String email, String username,
-                                           String password) {
+    public Observable<DataResponse> signUp(@Nullable Context context, @NonNull String email,
+                                           @Nullable String username, @Nullable String password) {
         logger.debug("Called signUp");
         // we should pass in data groups, removeConsent roles
         SignUp signUp = new SignUp().study(getStudyId()).email(email).password(password);
@@ -327,9 +327,8 @@ public abstract class BridgeDataProvider extends DataProvider {
     }
 
     @NonNull
-    public Observable<DataResponse> signUp(@NonNull String email, @NonNull String password) {
+    public Observable<DataResponse> signUp(@NonNull String email, @Nullable String password) {
         checkNotNull(email);
-        checkNotNull(password);
 
         logger.debug("Called signUp");
 

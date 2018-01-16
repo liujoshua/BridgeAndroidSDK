@@ -117,6 +117,11 @@ public class AuthenticationManagerTest {
         testSignUp_helper(signUp);
     }
 
+    @Test
+    public void signUpEmailNoPassword() {
+
+    }
+
     private void testSignUp_helper(SignUp signUp) throws IOException {
         Message message = mock(Message.class);
         Call<Message> messageCall = successCall(message);

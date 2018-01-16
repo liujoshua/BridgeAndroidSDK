@@ -162,14 +162,14 @@ public class AuthenticationManager {
      * notifyByEmail, and any custom attributes you've defined for the attributes field.
      *
      * @param email    participant's email
-     * @param password participant's password
+     * @param password optional participant's password. If not provided, participant will receive
+     *                an email for sign in
      * @return notifies of completion or error
      * @see #signUp(SignUp)
      */
     @NonNull
-    public Completable signUp(@NonNull final String email, @NonNull final String password) {
+    public Completable signUp(@NonNull final String email, @Nullable final String password) {
         checkNotNull(email);
-        checkNotNull(password);
 
         logger.debug("signUp called with email: " + email);
 
@@ -178,7 +178,6 @@ public class AuthenticationManager {
                 .study(config.getStudyId())
                 .email(email)
                 .password(password);
-
         return signUp(participantSignUp);
     }
 
@@ -199,7 +198,6 @@ public class AuthenticationManager {
     public Completable signUp(@NonNull final SignUp signUp) {
         checkNotNull(signUp);
         checkNotNull(signUp.getEmail());
-        checkNotNull(signUp.getPassword());
 
         logger.debug("signUp called with signUp: " + signUp);
 
@@ -229,6 +227,7 @@ public class AuthenticationManager {
                             .externalId(signUp.getExternalId());
 
                     accountDAO.setStudyParticipant(participant);
+
                 }).doOnError(throwable -> {
                     accountDAO.setSignIn(null);
                     accountDAO.setStudyParticipant(null);
