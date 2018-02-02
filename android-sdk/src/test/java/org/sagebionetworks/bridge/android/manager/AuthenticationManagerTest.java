@@ -1,5 +1,6 @@
 package org.sagebionetworks.bridge.android.manager;
 
+import com.google.common.base.Functions;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
@@ -47,9 +48,9 @@ import rx.Observable;
 import rx.Single;
 
 import static junit.framework.Assert.assertFalse;
-import static junit.framework.Assert.assertNotSame;
 import static junit.framework.Assert.assertSame;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -71,12 +72,10 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 @Ignore // TODO: mdephillips 2/2/18 after we added email-only auth we broke unit test, must fix ASAP
 public class AuthenticationManagerTest {
-
     private static final String STUDY_ID = "study-id";
     private static final String EMAIL = "email@test.com";
     private static final String PASSWORD = "P4ssw0rd";
     private static final String SUBPOPULATION_GUID = "subpopulationGuid";
-
 
     @Mock
     private BridgeConfig config;
@@ -110,6 +109,129 @@ public class AuthenticationManagerTest {
                 accountDAO, consentDAO));
 
         authStateHolderAtomicReference = spyAuthenticationManager.getAuthStateReference();
+    }
+
+    @Test
+    public void createAuthenticatedClientProviderFromStoredCredentials_NoEmail() {
+        when(accountDAO.getEmail()).thenReturn(null);
+
+        ApiClientProvider.AuthenticatedClientProvider provider = spyAuthenticationManager
+                .createAuthenticatedClientProviderFromStoredCredentials();
+
+        assertNull(provider);
+
+        verify(accountDAO.getEmail());
+    }
+
+    @Test
+    public void createAuthenticatedClientProviderFromStoredCredentials_EmailOnly() {
+        String email = "email@example.com";
+        when(accountDAO.getEmail()).thenReturn(email);
+
+        ApiClientProvider.AuthenticatedClientProviderBuilder builder = getMockAuthenticatedBuilder();
+
+        ApiClientProvider.AuthenticatedClientProvider providerResult =
+                spyAuthenticationManager.createAuthenticatedClientProviderFromStoredCredentials();
+
+        assertNull(providerResult);
+
+        verify(apiClientProvider).getAuthenticatedClientProviderBuilder();
+        verify(builder).withEmail(email);
+    }
+
+    @Test
+    public void createAuthenticatedClientProviderFromStoredCredentials_EmailAndPassword() {
+        String email = "email@example.com";
+        String password = "password";
+        when(accountDAO.getEmail()).thenReturn(email);
+        when(accountDAO.getPassword()).thenReturn(password);
+
+        ApiClientProvider.AuthenticatedClientProviderBuilder builder = getMockAuthenticatedBuilder();
+
+        ApiClientProvider.AuthenticatedClientProvider provider =
+                mock(ApiClientProvider.AuthenticatedClientProvider.class);
+        when(builder.build()).thenReturn(provider);
+
+        ApiClientProvider.AuthenticatedClientProvider providerResult =
+                spyAuthenticationManager.createAuthenticatedClientProviderFromStoredCredentials();
+
+        assertEquals(provider, providerResult);
+
+        verify(apiClientProvider).getAuthenticatedClientProviderBuilder();
+        verify(builder).withEmail(email);
+        verify(builder).withPassword(password);
+        verify(builder, never()).withSession(any());
+
+        verify(builder).build();
+    }
+
+    @Test
+    public void createAuthenticatedClientProviderFromStoredCredentials_EmailAndSession() {
+        String email = "email@example.com";
+        UserSessionInfo session = mock(UserSessionInfo.class);
+
+        when(accountDAO.getEmail()).thenReturn(email);
+        when(accountDAO.getPassword()).thenReturn(null);
+        when(accountDAO.getUserSessionInfo()).thenReturn(session);
+
+        ApiClientProvider.AuthenticatedClientProviderBuilder builder =
+                getMockAuthenticatedBuilder();
+
+        ApiClientProvider.AuthenticatedClientProvider provider =
+                mock(ApiClientProvider.AuthenticatedClientProvider.class);
+        when(builder.build()).thenReturn(provider);
+
+        ApiClientProvider.AuthenticatedClientProvider providerResult =
+                spyAuthenticationManager.createAuthenticatedClientProviderFromStoredCredentials();
+
+        assertEquals(provider, providerResult);
+
+        verify(apiClientProvider).getAuthenticatedClientProviderBuilder();
+        verify(builder).withEmail(email);
+        verify(builder, never()).withPassword(any());
+        verify(builder).withSession(session);
+        verify(builder).build();
+    }
+
+    @Test
+    public void createAuthenticatedClientProviderFromStoredCredentials_EmailAndPasswordAndSession() {
+        String email = "email@example.com";
+        String password = "password";
+        UserSessionInfo session = mock(UserSessionInfo.class);
+
+        when(accountDAO.getEmail()).thenReturn(email);
+        when(accountDAO.getPassword()).thenReturn(password);
+        when(accountDAO.getUserSessionInfo()).thenReturn(session);
+
+        ApiClientProvider.AuthenticatedClientProviderBuilder builder =
+                getMockAuthenticatedBuilder();
+
+        ApiClientProvider.AuthenticatedClientProvider provider =
+                mock(ApiClientProvider.AuthenticatedClientProvider.class);
+        when(builder.build()).thenReturn(provider);
+
+        ApiClientProvider.AuthenticatedClientProvider providerResult =
+                spyAuthenticationManager.createAuthenticatedClientProviderFromStoredCredentials();
+
+        assertEquals(provider, providerResult);
+
+        verify(apiClientProvider).getAuthenticatedClientProviderBuilder();
+        verify(builder).withEmail(email);
+        verify(builder).withPassword(password);
+        verify(builder).withSession(session);
+        verify(builder).build();
+    }
+
+    private ApiClientProvider.AuthenticatedClientProviderBuilder getMockAuthenticatedBuilder() {
+        ApiClientProvider.AuthenticatedClientProviderBuilder builder =
+                mock(ApiClientProvider.AuthenticatedClientProviderBuilder.class);
+        when(apiClientProvider.getAuthenticatedClientProviderBuilder()).thenReturn(builder);
+
+        when(builder.withEmail(any())).thenReturn(builder);
+        when(builder.withPassword(any())).thenReturn(builder);
+        when(builder.withSession(any())).thenReturn(builder);
+
+        return builder;
     }
 
     @Test
@@ -220,6 +342,8 @@ public class AuthenticationManagerTest {
 
         when(authenticationApi.signIn(signIn)).thenReturn(userSessionInfoCall);
 
+        when(spyAuthenticationManager.signInHelper(any())).thenReturn(i -> i);
+        
         ForConsentedUsersApi mockSignedInApi = mock(ForConsentedUsersApi.class);
 //        when(apiClientProvider.getClient(ForConsentedUsersApi.class, signIn))
 //                .thenReturn(mockSignedInApi);
