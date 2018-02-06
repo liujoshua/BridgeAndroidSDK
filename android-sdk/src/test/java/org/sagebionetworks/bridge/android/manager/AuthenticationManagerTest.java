@@ -342,7 +342,9 @@ public class AuthenticationManagerTest {
 
         when(authenticationApi.signIn(signIn)).thenReturn(userSessionInfoCall);
 
-        when(spyAuthenticationManager.signInHelper(any())).thenReturn(i -> i);
+        Single.Transformer<UserSessionInfo, UserSessionInfo> ret = i -> i;
+        doReturn(ret).when(spyAuthenticationManager).signInHelper(any());
+//        when(spyAuthenticationManager.signInHelper(any())).thenReturn(i -> i);
         
         ForConsentedUsersApi mockSignedInApi = mock(ForConsentedUsersApi.class);
 //        when(apiClientProvider.getClient(ForConsentedUsersApi.class, signIn))

@@ -362,6 +362,28 @@ public class AuthenticationManager {
                     }
                     return Single.error(t);
                 })
+                .flatMap(session -> {
+                    if (!session.getConsented()) {
+                        // look for a missing required consent which we have locally
+                        for (Map.Entry<String, ConsentStatus> consentStatusEntry : session
+                                .getConsentStatuses().entrySet()) {
+                            String subpopulationGuid = consentStatusEntry.getKey();
+                            ConsentStatus consentStatus = consentStatusEntry.getValue();
+
+                            // required consent missing on Bridge and present locally
+                            if (consentStatus.getRequired()
+                                    && !consentStatus.getConsented()
+                                    && isConsentedInLocal(subpopulationGuid)) {
+
+                                // upload local consents, fail this sign in if consent upload fails
+                                return uploadLocalConsents()
+                                        .toSingle();
+                            }
+                        }
+                    }
+                    // nothing to do, return the same session
+                    return Single.just(session);
+                })
                 .doOnSuccess(session -> {
                     accountDAO.setEmail(email);
 
@@ -380,34 +402,11 @@ public class AuthenticationManager {
                     accountDAO.setStudyParticipant(
                             new StudyParticipant()
                                     .email(signIn.getEmail()));
-
-                    if (!session.getConsented()) {
-                        // look for a missing required consent which we have locally
-                        for (Map.Entry<String, ConsentStatus> consentStatusEntry : session
-                                .getConsentStatuses().entrySet()) {
-                            String subpopulationGuid = consentStatusEntry.getKey();
-                            ConsentStatus consentStatus = consentStatusEntry.getValue();
-
-                            // required consent missing on Bridge and present locally
-                            if (consentStatus.getRequired()
-                                    && !consentStatus.getConsented()
-                                    && isConsentedInLocal(subpopulationGuid)) {
-
-                                // upload local consents, ignoring errors
-                                uploadLocalConsents()
-                                        .onErrorResumeNext(Observable.just(session))
-                                        .subscribe();
-                                break;
-                            }
-                        }
-                    }
-
                 })
                 .doOnError(t -> {
                     accountDAO.setSignIn(null);
                     accountDAO.setPassword(null);
                     accountDAO.setUserSessionInfo(null);
-
                 });
     }
 
